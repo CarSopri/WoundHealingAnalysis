@@ -1,0 +1,84 @@
+
+
+[folders]
+main_folder = "/paste/main/images/directory/here/"
+# =========================
+# The number of elements in sub_folders has to be the same as in time_batches and name_time_batches (you might need to repeat the name of the folder)
+# =========================
+sub_folders = [ "paste/all/subfolders/inside/main_folder/with/images/to/analyze",
+                "leave/empty/string/if/no/subfolders/are/needed/"]
+
+
+[format]          
+file_format = ".tif"
+
+
+[timeframe_name_convention]
+# =========================
+# There has to be as many elements in time_batches as in name_time_batches
+# It assumes that the naming convention might have changed for example if measures were taken on different days, or if the first image follows a different naming system to the rest
+# So, write the naming convention for every time batch in name_time_batches, and the number of files with that naming convention in time_batches for every one of them
+# =========================
+time_batches = [[1,2,3], [4,5,6]] 
+name_time_batches = ["_03_1_", "_06_1_"]
+# =========================
+# Write the naming convention for the first timeframe; the rest will be assumed to be following the same convention in order as they appear in time_batches
+# If naming convention changes, maybe write every combination in name_time_batches as a vector, and leave first_timeframe as ""
+# =========================
+first_timeframe = "001" 
+
+
+[pit_name_convention]
+common_name = "_Bright Field-High Contrast_" # If there is a part of the filename that repeats for every file 
+rois = ["ROI1","ROI2","ROI3"] # Write the naming convention for every ROI in the pit with most ROIs. If some pit has a different ROI convention, write every possibility here and the code will just ignore images not found, searching in the order you write here.
+# =========================
+# ALWAYS write in the corresponding order the 5 parts of the naming convention: common_name, roi, name_time_batch, pit_name, time_frame. 
+# If any of these is not present in your naming convention, leave an empty string or vector in the corresponding variable and place it wherever in follow_convention (but it must be present!).
+# =========================
+follow_convention = "pit_name*name_time_batch*roi*common_name*time_frame" 
+naming_mode = "generated" # If you have many files you might want to write the convention of row and column pit names in a plate. If no regular convention was followed, write every pit name manually. 
+conditions = ["control", "treatment"] # Write the names of the conditions you wish to study separately
+
+
+[pit_name_convention.manual]
+# =========================
+# Ignore if you prefer the names to be automatically generated
+# Else, write the IDs for every pit manually
+# =========================
+pit_names = ["A1","A2"]
+row = "A"
+col = "12"
+pit_conditions = [1,1]
+
+
+[pit_name_convention.generated]
+# =========================
+# Ignore if you prefer the names to be input manually
+# Else, every combination of row+col will be generated from the string ("1234") or vector (["1","2","3","4"]) written as input
+# =========================
+row = "ABCD"
+col = "123456"
+ignore_pits = ["B1","B2","C1","C2","D5","D6"] # These pits were empty in the experiment or should be left out of the automatic naming generation for some reason. Leave empty [] if all of them were used, or if you don't mind the code taking a little longer while it tries to find images that don't exist.
+pit_conditions = [1, 1, 1, 1, 1, 1,
+                  0, 0, 2, 2, 2, 1,
+                  0, 0, 1, 1, 1, 1,
+                  2, 2, 2, 2, 0, 0] # Write the number for every pit corresponding to the order of the conditions written in the conditions variable. Here, 1 means "control", 2 means "treatment" and 0 means "nothing to analyze here".
+
+
+[which_files]
+# =========================
+# Number indicates the order in which the filenames are created
+# =========================
+from_file = 1 # Maybe you don't want to analyse all of the image files, so start from this pit 
+until_file = -1 # And end on this one (count them in order as they're generated!). If -1, takes the last one found
+keep_rois = [3,2,2,3,1,2,   # Maybe you have only some pits with less ROIs than others, and you know how many (write a number for every pit to save runtime)
+            0,0,1,1,1,1,
+            0,0,2,1,1,2,
+            2,3,3,2,0,0]
+exclude = ["A1ROI1", "D4ROI2"]  # For these ROIs there is a corresponding image file but for some reason you deem them not suitable for the analysis and would rather skip it. Don't write the full name of the file, just combine row_name+col_name+roi_name
+
+[save_data]
+report = true
+save_images = false
+invert = true
+

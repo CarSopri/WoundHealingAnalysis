@@ -1,0 +1,83 @@
+[folders]
+
+main_folder = "/data/Ximena Guerbi - ensayo de herida - 2026.06.05/260605_145859_Cinetica herida Xime_continua_Modificada con delays_2025_260605_145852/"
+# =========================
+# The number of elements in sub_folders has to be the same as in time_batches and name_time_batches (you might need to repeat the name of the folder)
+# =========================
+sub_folders = [  "260605_145859_Plate 1/","260605_145859_Plate 1/","260605_145859_Plate 1/" ]
+
+
+[format]          
+file_format = ".tif"
+
+
+[timeframe_name_convention]
+# =========================
+# There has to be as many elements in time_batches as in name_time_batches
+# It assumes that the naming convention might have changed if measures were taken on different days
+# So, write the naming convention for every time batch in name_time_batches, and the number of files with that naming convention in time_batches for every one of them
+# =========================
+time_batches = [[1,2,3,4,5,6,7,8,9],[10,11,12,13],[14,15,16,17,18,19,20,21]] #,2,3,4,5,6,7,8],[9], [10]] #***no sé si esto es tan general como me gustaría en realidad, pienso que el primer timeframe podría ser "0" y el resto "001" como pasó con lowenstein, pensar***
+name_time_batches = ["_03_1_1","_07_1_1","_11_1_1"]
+# =========================
+# Write the naming convention for the first timeframe; the rest will be assumed to be following the same convention in order as they appear in time_batches
+# If naming convention changes, maybe write every combination in name_time_batches as a vector, and leave first_timeframe as ""
+# =========================
+first_timeframe = "001" 
+
+
+[pit_name_convention]
+common_name = "_Bright Field-High Contrast_" # If there is a part of the filename for every file that repeats
+rois = ["ROI1","ROI2","ROI3","ROI4","ROI5"] # Write the numbers or names for every ROI in a pit. Assume that every pit follows the same naming convention in the same order as the pit with the most ROIs. Could be string ("123") or vector (["1","2","3"])
+# =========================
+# ALWAYS write in the corresponding order the 5 parts of the naming convention: common_name, roi, name_time_batch, pit_name, time_frame **qué pasa si quer{es saltearte alguna ?
+# =========================
+follow_convention = "pit_name*roi*name_time_batch*common_name*time_frame" 
+naming_mode = "generated"
+conditions = ["control", "100hAM", "200hAM", "300hUC", "600hUC"]
+
+
+[pit_name_convention.manual]
+# =========================
+# Ignore if you prefer the names to be automatically generated
+# Else, write the IDs for every pit manually
+# =========================
+pit_names = ["A1","A2"] #******debería separar row y col? para el análisis?
+row = "A"
+col = "12"
+pit_conditions = [1,1]
+
+
+[pit_name_convention.generated]
+# =========================
+# Ignore if you prefer the names to be input manually
+# Else, every combination of row+col will be generated from the string ("1234") or vector (["1","2","3","4"]) written as input
+# =========================
+row = "ABCD" 
+col = "123456"
+ignore_pits = []#["B1","B2","C1","C2","D5","D6"] # these pits were empty in the experiment or should be left out of the automatic naming generation for some reason. leave [] if all of them were used
+pit_conditions = [1, 2, 3, 4, 5, 1,
+                  1, 2, 3, 4, 5, 1,
+                  1, 2, 3, 4, 5, 1,
+                  1, 2, 3, 4, 5, 1]
+
+[which_files]
+# =========================
+# Number indicates the order in which the filenames are created
+# =========================
+from_file = 1 # maybe you don't want to analyse all of the files, so start from this pit 
+until_file = -1 # and end on this one (count them in order!). if -1, takes the last one found
+keep_rois = [4, 2, 2, 2, 3, 3,
+            4, 4, 2, 1, 1, 2,
+            4, 2, 2, 3, 4, 4, 
+            3, 3, 3, 4, 5, 2]   # maybe you have only some pits with less rois than others, and you know how many (to save runtime)
+exclude = [ "B3ROI1",
+ "B3ROI2",
+ "B5ROI1"]  # for these rois there is a file but for some reason you deem them not suitable for the analysis
+
+[save_data]
+report = true
+save_images = true
+invert = false
+
+
