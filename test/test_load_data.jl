@@ -8,7 +8,6 @@
 
 main_code_folder = @__DIR__
 
-println(joinpath(main_code_folder,"..","src","load_data.jl"))
 include(joinpath(main_code_folder,"..","src","load_data.jl"))
 
 #code_folder = "c:/Users/Usuario/Downloads/segmentation_code/"
