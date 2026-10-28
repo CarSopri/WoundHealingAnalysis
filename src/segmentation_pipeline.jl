@@ -406,5 +406,7 @@ function run_segmentation_for_all_files(data::DataInfo, segmentation_hyperparams
     if report
         CSV.write(data.main_folder*"scratch_report.txt", report_file, delim='\t') #***esto lo tendría que adaptar para que vaya escribiendo cada tanto aunque sea idk; capaz un log que anote de dónde hasta dónde corrió x las dudas?
         CSV.write(data.main_folder*"time_report.txt", time_file, delim='\t')
+
+        #*********generar width report con std !
     end
 end

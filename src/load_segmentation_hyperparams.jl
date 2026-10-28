@@ -99,3 +99,17 @@ function load_data_from_hyperparams_file(hyperparams_file)
     return hyperparams
 end
 
+
+
+function load_preprocessing_pipeline(path::AbstractString)
+    config = TOML.parsefile(path)
+    return String.(config["steps"])
+end
+
+function save_preprocessing_pipeline(steps, path::AbstractString)
+    open(path, "w") do io
+        TOML.print(io, Dict("steps" => String.(steps)))
+    end
+    return nothing
+end
+

@@ -3,8 +3,6 @@ code_folder = @__DIR__
 include(joinpath(code_folder,"image_analyzers.jl"))
 include(joinpath(code_folder,"shadow_detection.jl"))
 include(joinpath(code_folder,"segment_positions_detection.jl"))
-#**otra cosa que tengo que revisar es el ignore_pits... me da un poco de fiaca que sea algo que haya que cargar manualmente. creo que debería poder ignorar automáticamente esos archivos si no existen, y cargarlos
-# capaz en un .txt de ignore_pits para que busque ahí directamente los que ignoró y se los saltee en vez de intentar cargar todos cada vez
 
 
 const DEFAULT_PREPROCESSING_STEPS = [
@@ -16,21 +14,7 @@ const DEFAULT_PREPROCESSING_STEPS = [
 ]
 
 
-function load_preprocessing_pipeline(path::AbstractString)
-    config = TOML.parsefile(path)
-    return String.(config["steps"])
-end
 
-function save_preprocessing_pipeline(steps, path::AbstractString)
-    open(path, "w") do io
-        TOML.print(io, Dict("steps" => String.(steps)))
-    end
-    return nothing
-end
-
-"""
-One important limitation: not every arbitrary reordering is valid. For example, equalize requires bandpass to have run first, and segment_mean requires map_labels. If a required step hasn't run, Julia will raise a missing-key error. That's useful initially, because it helps identify invalid sequences; we can make those error messages friendlier later.
-"""
 function apply_preprocessing_step!(name::String, ctx::Dict{Symbol, Any}, im, hp)
     if name == "bandpass"
         ctx[:filter_im] = Gray.(1.0 .- bandpass_filter(
@@ -46,21 +30,21 @@ function apply_preprocessing_step!(name::String, ctx::Dict{Symbol, Any}, im, hp)
         )
 
     elseif name == "detect_edges"
-        ctx[:filter_im1] = detect_edges(ctx[:filter_im])
+        ctx[:filter_im] = detect_edges(ctx[:filter_im])
 
     elseif name == "blur"
-        ctx[:filter_im2] = blur_image!(
-            ctx[:filter_im1],
+        ctx[:filter_im] = blur_image!(
+            ctx[:filter_im],
             hp.gaussian_blur_sigma,
             1,
         )
 
     elseif name == "threshold"
-        threshold = mean(ctx[:filter_im1]) * hp.wound_threshold
+        threshold = mean(ctx[:filter_im]) * hp.wound_threshold
 
         ctx[:filter_im] = Gray.(
             threshold_colors.(
-                ctx[:filter_im2],
+                ctx[:filter_im],
                 threshold,
             )
         )
@@ -73,8 +57,9 @@ function apply_preprocessing_step!(name::String, ctx::Dict{Symbol, Any}, im, hp)
 end
 
 
-function segmentation_steps(image_path, image_filename, segmentation_hyperparams; steps = DEFAULT_PREPROCESSING_STEPS, display_steps = false,)
-    im = load(joinpath(image_path, image_filename))
+function segmentation_steps(image_dir, image_filename, segmentation_hyperparams; steps = DEFAULT_PREPROCESSING_STEPS, display_steps = false,)
+    im = load(joinpath(image_dir, image_filename))
+    im_name = split(image_filename, ".")[1]
 
     ctx = Dict{Symbol, Any}()
 
@@ -99,7 +84,7 @@ function segmentation_steps(image_path, image_filename, segmentation_hyperparams
         )
         if display_steps
             #display(ctx[:filter_im])
-            save(joinpath(image_path,"$(image_filename)_$(step).png"), ctx[:filter_im])
+            save(joinpath(image_dir,"$(im_name)_$(step).png"), ctx[:filter_im])
         end
     end
 
@@ -121,7 +106,7 @@ function segmentation_steps(image_path, image_filename, segmentation_hyperparams
 
     if display_steps
         #display(ctx[:segmented_final_im])
-        save(joinpath(image_path,"$(image_filename)_$(step).png"), ctx[:segmented_final_im])
+        save(joinpath(image_dir,"$(im_name)_segmented.png"), ctx[:segmented_final_im])
     end
 
     result = (
@@ -132,46 +117,6 @@ function segmentation_steps(image_path, image_filename, segmentation_hyperparams
 
     return result
 end
-
-
-
-
-function segmentation_steps(im, segmentation_hyperparams)
-
-    gray_im = Gray.(im)
-
-    # Locate lens shadow (if present)
-    lens_shadow_indices, min_h, max_h, min_w, max_w = isolate_lens_shadow(gray_im, segmentation_hyperparams.shadow_threshold_color)
-    
-    bp = Gray.(1.0.-(bandpass_filter(gray_im, segmentation_hyperparams.min_bp_filter, segmentation_hyperparams.max_bp_filter)))
-    equalized = adjust_histogram(bp, Equalization(nbins = 256))
-    
-    # Detect edges with Laplacian Kernel
-    filtered_gray_im = detect_edges(equalized)
-    
-    # Blur the image
-    discrete_filtered_gray_im = blur_image!(filtered_gray_im, segmentation_hyperparams.gaussian_blur_sigma, 1) # **por qué los pixeles blancos no vuelven blancos ??
-    
-    corrected_img = Gray.(threshold_colors.(discrete_filtered_gray_im,mean(filtered_gray_im)*segmentation_hyperparams.wound_threshold))
-    
-    # Separate lens shadow (if present) # **podría restar los 1.0 que no quiero ?
-    corrected_img[lens_shadow_indices] .= 1.0
-    
-    discrete_final_im = corrected_img
-    
-    # Get image segmentation
-    segments = felzenszwalb(discrete_final_im, segmentation_hyperparams.meansize_wound, segmentation_hyperparams.minsize_wound) #imagen, tamaño aprox de clusters, mínimos píxeles para hacer sección
-    labels_segments = labels_map(segments)
-    segmented_final_im = map(i->segment_mean(segments,i), labels_segments) # segment_mean busca el color promedio del segmento y lo asigna a todo el segmento
-
-    return segments, labels_segments, segmented_final_im
-end
-
-
-# Display image steps **agregar títulos o labels ?
-    #display([im filtered_gray_im
-    #discrete_filtered_gray_im corrected_img
-    #discrete_final_im segmented_final_im ])
 
 function get_felzenszwalb_hyperparams(k, meansize, minsize, inv_max_tries)
     """
@@ -500,7 +445,7 @@ function run_segmentation(main_folder, ID, im_file, report_file, save_images, y_
     Find if there are any shadows present in the image (this is analyzed from the segmented image), and escape the function to redo segmentation if a cut is needed.
     """
     #***esto debería tener una lógica distinta porque sólo va a correr en el primer paso pero no queda super explícito como está ahora (y_cut=(nothing,nothing) sólo en T=001)
-    y_cut, cut_made = identify_and_cut_shadow(h,w, y_cut, segments, segmented_final_im, segmentation_hyperparams.shadow_segment_threshold_color, segmentation_hyperparams.margin, segmentation_hyperparams.image_partition)
+    y_cut, cut_made = identify_and_cut_shadow(h,w, y_cut, segments, segmented_final_im, segmentation_hyperparams.shadow_segment_threshold_color, segmentation_hyperparams.margin, [segmentation_hyperparams.max_left_wall_wound_position, segmentation_hyperparams.max_right_wall_wound_position])
     # Run segmentation again if a shadow was identified, now with the image cut where the shadow ends.
     if cut_made
         return y_cut,cut_made 

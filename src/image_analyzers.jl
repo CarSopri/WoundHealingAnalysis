@@ -1,5 +1,5 @@
-using Images #*****ver bien cuáles de estos uso dónde (shadow_detection, segment_positions_detection, segment_image)
-using ImageFiltering
+using Images #: load, Kernel, imfilter, rawview #*****ver bien cuáles de estos uso dónde (shadow_detection, segment_positions_detection, segment_image)
+using ImageFiltering #: imfilter
 using OffsetArrays
 using Statistics
 using ImageSegmentation
