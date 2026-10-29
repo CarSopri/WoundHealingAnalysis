@@ -25,6 +25,7 @@ segmentation_hyperparams = load_data_from_hyperparams_file(HYPERPARAMS_FILE)
 # Run segmentation
 segments, labels_segments, segmented_final_im = segmentation_steps(image_dir, image_filename, segmentation_hyperparams; steps=steps, display_steps = true,)
 
-#****** esto lo debería hacer en segmentation steps, idem los hyperparams para hacer seguimiento !!
+
 save_preprocessing_pipeline(steps, joinpath(PROJECT_DIR,"examples","PreprocessingSteps.toml"))
+save_hyperparams_to_file(segmentation_hyperparams, joinpath(PROJECT_DIR,"examples","Hyperparams.toml"))
 

@@ -11,8 +11,8 @@ main_code_folder = @__DIR__
 include(joinpath(main_code_folder,"..","src","load_data.jl"))
 
 #code_folder = "c:/Users/Usuario/Downloads/segmentation_code/"
-project_dir = joinpath(main_code_folder, "..","config")
-config_file = joinpath(project_dir,"config.toml")
+project_dir = joinpath(main_code_folder, "..","examples")
+config_file = joinpath(project_dir,"config_exp2.toml")
 
 data = load_data_from_config_file(config_file)
 
