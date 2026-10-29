@@ -28,6 +28,9 @@ function run_segmentation_playground(;image_path = nothing, hyperparams_path = n
 
     segments, labels_segments, segmented_final_im = segmentation_steps(image_dir, image_filename, segmentation_hyperparams; steps=steps, display_steps = true)
 
+    save_preprocessing_pipeline(steps, joinpath(image_dir,"PreprocessingSteps.toml"))
+    save_hyperparams_to_file(segmentation_hyperparams, joinpath(image_dir,"Hyperparams.toml"))
+
 end
 
 
