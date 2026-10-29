@@ -3,9 +3,10 @@ code_folder = @__DIR__
 include(joinpath(code_folder,"image_analyzers.jl"))
 include(joinpath(code_folder,"shadow_detection.jl"))
 include(joinpath(code_folder,"segment_positions_detection.jl"))
+include(joinpath(code_folder,"load_segmentation_hyperparams.jl"))
 
 
-const DEFAULT_PREPROCESSING_STEPS = [
+const DEFAULT_PREPROCESSING_STEPS::Vector{String} = [
     "bandpass",
     "equalize",
     "detect_edges",
@@ -15,7 +16,7 @@ const DEFAULT_PREPROCESSING_STEPS = [
 
 
 
-function apply_preprocessing_step!(name::String, ctx::Dict{Symbol, Any}, im, hp)
+function apply_preprocessing_step!(name::String, ctx::Dict{Symbol, Any}, hp::SegmentationHyperparameters)
     if name == "bandpass"
         ctx[:filter_im] = Gray.(1.0 .- bandpass_filter(
             ctx[:filter_im],
@@ -57,7 +58,7 @@ function apply_preprocessing_step!(name::String, ctx::Dict{Symbol, Any}, im, hp)
 end
 
 
-function segmentation_steps(image_dir, image_filename, segmentation_hyperparams; steps = DEFAULT_PREPROCESSING_STEPS, display_steps = false,)
+function segmentation_steps(image_dir::String, image_filename::String, segmentation_hyperparams::SegmentationHyperparameters; steps::Vector{String} = DEFAULT_PREPROCESSING_STEPS, display_steps::Bool = false,)
     im = load(joinpath(image_dir, image_filename))
     im_name = split(image_filename, ".")[1]
 
@@ -71,19 +72,11 @@ function segmentation_steps(image_dir, image_filename, segmentation_hyperparams;
     ctx[:min_h],
     ctx[:max_h],
     ctx[:min_w],
-    ctx[:max_w] =
-        isolate_lens_shadow(
-            ctx[:filter_im],
-            segmentation_hyperparams.shadow_threshold_color,
-        )
+    ctx[:max_w] = isolate_lens_shadow(ctx[:filter_im], segmentation_hyperparams.shadow_threshold_color)
 
     for step in steps
-        apply_preprocessing_step!(step, ctx,
-            ctx[:filter_im],
-            segmentation_hyperparams,
-        )
+        apply_preprocessing_step!(step, ctx, segmentation_hyperparams)
         if display_steps
-            #display(ctx[:filter_im])
             save(joinpath(image_dir,"$(im_name)_$(step).png"), ctx[:filter_im])
         end
     end
@@ -92,20 +85,13 @@ function segmentation_steps(image_dir, image_filename, segmentation_hyperparams;
     ctx[:filter_im][ctx[:lens_shadow_indices]] .= 1.0
 
     # Apply felzenszwalb segmentation
-    ctx[:segments] = felzenszwalb(
-        ctx[:filter_im],
-        segmentation_hyperparams.meansize_wound,
-        segmentation_hyperparams.minsize_wound,
-    )
+    ctx[:segments] = felzenszwalb(ctx[:filter_im], segmentation_hyperparams.meansize_wound, segmentation_hyperparams.minsize_wound)
+
     # Save segmentation results
     ctx[:labels_segments] = labels_map(ctx[:segments])
-    ctx[:segmented_final_im] = map(
-        i -> segment_mean(ctx[:segments], i),
-        ctx[:labels_segments],
-    )
+    ctx[:segmented_final_im] = map(i -> segment_mean(ctx[:segments], i), ctx[:labels_segments])
 
     if display_steps
-        #display(ctx[:segmented_final_im])
         save(joinpath(image_dir,"$(im_name)_segmented.png"), ctx[:segmented_final_im])
     end
 
@@ -439,7 +425,7 @@ function run_segmentation(main_folder, ID, im_file, report_file, save_images, y_
     """
     Run preprocessing of the image and segmentation algorithm.
     """
-    segments, labels_segments, segmented_final_im = segmentation_steps(im, segmentation_hyperparams)
+    segments, labels_segments, segmented_final_im = segmentation_steps(joinpath(splitpath(im_file)[1:end-1]), splitpath(im_file)[end], segmentation_hyperparams) #***falta steps
 
     """
     Find if there are any shadows present in the image (this is analyzed from the segmented image), and escape the function to redo segmentation if a cut is needed.
@@ -501,9 +487,9 @@ function run_segmentation(main_folder, ID, im_file, report_file, save_images, y_
 
     if report_file != 0
         #**cuidado si la fila no existe la tengo que agregar, y idem la columna (pero capaz eso desde afuera)
-        row = findfirst(report_file.ID .== ID[1:end-12]) # pit name
+        row = findfirst(report_file.ID .== ID[1:end-12]) # well name
         col = parse(Int64,ID[end-2:end]) # time value
-        #@info ("Row: ",row," Col: ",col)
+        @info ("Row: ",row," Col: ",col)
 
         report_file[row, col+1] = area_scratch
         #print(report_file,"\t",length(findall(item -> item == area_scratch, labels_segments)))

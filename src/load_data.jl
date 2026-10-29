@@ -4,30 +4,33 @@ using TOML
 Base.@kwdef mutable struct DataInfo
 
     main_folder::String = @__DIR__
-    sub_folders::Vector{String} = [""]
+    subfolders::Vector{String} = [""]
             
     file_format::String = ".tif"
 
-    # The number of elements in sub_folders has to be the same as in time_batches and name_time_batches
-    time_batches::Vector{Vector{Int}} = []
-    name_time_batches::Vector{String} = []
-    first_timeframe::String = "001"
-
-    common_name::String = ""
-    follow_convention::Vector{String} = ["common_name","rois","name_time_batches","pit_names"]
     conditions::Vector{String} = ["control"]
+
+    # The number of elements in subfolders has to be the same as in time_series and name_time_series
+    time_series::Vector{Vector{Int}} = []
+    name_time_series::Vector{String} = []
+    first_timepoint::String = "001"
+
+    channels::Vector{String} = ["1_"]
+    common_name::String = ""
+    follow_convention::Vector{String} = ["common_name","roi","name_time_series","well_name","channel","timepoint"]
+
+    rois::Union{String,Vector{String}} = ""
 
     row_names::Union{String,Vector{String}} = ""
     col_names::Union{String,Vector{String}} = ""
-    pit_conditions::Vector{Int} = []
+    well_conditions::Vector{Int} = []
 
-    pit_names::Vector{String} = []
-    ignore_pits::Vector{String} = []
-    pits_used::Vector{String} = []
-    keep_rois::Vector{Int} = [] #***acomodar esto, el de arriba saca pits directamente y este deja rois. also no sé si esto anda si está vacío ?
+    well_names::Vector{String} = []
+    ignore_wells::Vector{String} = []
+    wells_used::Vector{String} = []
+    keep_rois::Vector{Int} = [] #***acomodar esto, el de arriba saca wells directamente y este deja rois. also no sé si esto anda si está vacío ?
     exclude::Vector{String} = []
 
-    rois::Union{String,Vector{String}} = ""
 
     all_files::Vector{String} = []
 
@@ -35,15 +38,45 @@ Base.@kwdef mutable struct DataInfo
     save_images::Bool = false
 end
 
-function ignore_rois_from_this_int(cutoff::Int, pit::String, n_rois::Int) #**ojo que este anda solamente para la segunda convención we
-    return [pit*"ROI"*string(i) for i in cutoff+1:n_rois]
+function ignore_rois_from_this_int(cutoff::Int, well::String, n_rois::Int) #**ojo que este anda solamente para la segunda convención we
+    return [well*"ROI"*string(i) for i in cutoff+1:n_rois]
 end
-function ignore_rois_from_this_int(list_cutoffs,list_pits,n_rois::Int)
-    return reduce(vcat, [ignore_rois_from_this_int(cutoff,pit,n_rois) for (cutoff,pit) in zip(list_cutoffs,list_pits)])
+function ignore_rois_from_this_int(list_cutoffs,list_wells,n_rois::Int)
+    return reduce(vcat, [ignore_rois_from_this_int(cutoff,well,n_rois) for (cutoff,well) in zip(list_cutoffs,list_wells)])
 end
 
-#data.keep_rois = ignore_rois_from_this_int(d["which_files"]["keep_rois"],
-#                                            [l for l in data.pit_names],length(data.rois)
+const FILENAME_COMPONENTS = Set([
+    "common_name",
+    "roi",
+    "name_time_series",
+    "well_name",
+    "channel",
+    "timepoint",
+])
+
+function validate_naming_convention(data::DataInfo)
+    unknown = setdiff(data.follow_convention, FILENAME_COMPONENTS)
+
+    isempty(unknown) ||
+        error("Unknown filename component(s) in follow_convention: $unknown")
+
+    length(data.follow_convention) == length(FILENAME_COMPONENTS) ||
+        error("follow_convention must contain each filename component exactly once.")
+
+    length(unique(data.follow_convention)) == length(data.follow_convention) ||
+        error("follow_convention contains duplicate components.")
+
+    length(data.time_series) == length(data.name_time_series) ||
+        error("time_series and name_time_series must have the same length.")
+
+    length(data.time_series) == length(data.subfolders) ||
+        error("time_series and subfolders must have the same length.")
+
+    return nothing
+end
+
+#data.keep_rois = ignore_rois_from_this_int(d["file_selection"]["keep_rois"],
+#                                            [l for l in data.well_names],length(data.rois)
 #                                            )
 
 function load_data_from_config_file(config_file)
@@ -52,69 +85,91 @@ function load_data_from_config_file(config_file)
     data = DataInfo()
 
     data.main_folder = d["folders"]["main_folder"]
-    data.sub_folders = d["folders"]["sub_folders"]
+    data.subfolders = d["folders"]["subfolders"]
             
     data.file_format = d["format"]["file_format"]
+    data.conditions = d["conditions"]["conditions"]
 
-    # The number of elements in sub_folders has to be the same as in time_batches and name_time_batches
-    data.time_batches = d["timeframe_name_convention"]["time_batches"]
-    data.name_time_batches = d["timeframe_name_convention"]["name_time_batches"]
-    data.first_timeframe = d["timeframe_name_convention"]["first_timeframe"]
+    # The number of elements in subfolders has to be the same as in time_series and name_time_series
+    data.time_series = d["timepoint_naming_convention"]["time_series"]
+    data.name_time_series = d["timepoint_naming_convention"]["name_time_series"]
+    data.first_timepoint = d["timepoint_naming_convention"]["first_timepoint"]
 
-    data.common_name = d["pit_name_convention"]["common_name"]
-    follow_convention = split(d["pit_name_convention"]["follow_convention"],"*")
-    #follow_convention = "common_name*roi*name_time_batch*pit_name"
-    #follow_convention = "common_name*pit_name*time_batch" ? y roi puede ser 0 en todo caso
+    data.channels = d["general_naming_convention"]["channels"]
+    data.common_name = d["general_naming_convention"]["common_name"]
+    data.follow_convention = split(d["general_naming_convention"]["follow_convention"],"*")
+    follow_convention = data.follow_convention
 
-    data.conditions = d["pit_name_convention"]["conditions"]
+    data.rois = d["well_naming_convention"]["rois"]
 
-    if d["pit_name_convention"]["naming_mode"] == "manual"
-        data.row_names = d["pit_name_convention"]["manual"]["row"]
-        data.col_names = d["pit_name_convention"]["manual"]["col"]
-        data.pit_names = d["pit_name_convention"]["manual"]["pit_names"]
-        data.pit_conditions = d["pit_name_convention"]["manual"]["pit_conditions"]
-    elseif d["pit_name_convention"]["naming_mode"] == "generated"
-        #data.pit_names = [l*n*"ROI"*string(roi) for l in d["row"] for n in d["col"] for roi in 1:parse(Int64,d["max_rois"])]
-        data.row_names = d["pit_name_convention"]["generated"]["row"]
-        data.col_names = d["pit_name_convention"]["generated"]["col"]
-        data.pit_names = [l*n for l in data.row_names for n in data.col_names]
-        data.pit_conditions = d["pit_name_convention"]["generated"]["pit_conditions"]
+    if d["well_naming_convention"]["well_naming_mode"] == "manual"
+        data.row_names = d["well_naming_convention"]["manual"]["row"]
+        data.col_names = d["well_naming_convention"]["manual"]["col"]
+        data.well_names = d["well_naming_convention"]["manual"]["well_names"]
+        data.well_conditions = d["well_naming_convention"]["manual"]["well_conditions"]
+        data.ignore_wells = []
+    elseif d["well_naming_convention"]["well_naming_mode"] == "generated"
+        data.row_names = d["well_naming_convention"]["generated"]["row"]
+        data.col_names = d["well_naming_convention"]["generated"]["col"]
+        data.well_names = [l*n for l in data.row_names for n in data.col_names]
+        data.well_conditions = d["well_naming_convention"]["generated"]["well_conditions"]
+        data.ignore_wells = d["well_naming_convention"]["generated"]["ignore_wells"]
     else
-        error("Please check that naming_mode is set to either 'manual' or 'generated'. \nIn the first case, write the naming convention used for each pit. \nIn the second case, write the names for the columns and the rows, such that the complete names are generated automatically.")
+        error("Please check that well_naming_mode is set to either 'manual' or 'generated'. \nIn the first case, write the naming convention used for each well. \nIn the second case, write the names for the columns and the rows, such that the complete names are generated automatically.")
     end
     
-    data.ignore_pits = d["pit_name_convention"]["generated"]["ignore_pits"]
-    if d["which_files"]["until_file"] == -1
-        data.pits_used = setdiff(data.pit_names,data.ignore_pits)[d["which_files"]["from_file"]:end]
+
+    if d["file_selection"]["until_file"] == -1
+        data.wells_used = setdiff(data.well_names,data.ignore_wells)[d["file_selection"]["from_file"]:end]
     else
-        data.pits_used = setdiff(data.pit_names,data.ignore_pits)[d["which_files"]["from_file"]:d["which_files"]["until_file"]]
+        data.wells_used = setdiff(data.well_names,data.ignore_wells)[d["file_selection"]["from_file"]:d["file_selection"]["until_file"]]
     end
 
-    data.rois = d["pit_name_convention"]["rois"]
 
     parts = Dict{String, Union{String,Vector{String}}}()
 
     parts["common_name"] = [data.common_name]          # [string]
-    parts["pit_name"]    = data.pits_used               # vector of strings
+    parts["well_name"]    = data.wells_used               # vector of strings
     parts["roi"]         = data.rois                      # vector of strings OR string to loop over chars 
-    parts["name_time_batch"]  = data.name_time_batches     # vector OR [string]
-    parts["time_frame"] = [data.first_timeframe]       # [string] ****** revisar por si cambia la convención temporal
+    parts["name_time_series"]  = [data.name_time_series[1]]     # vector OR [string]
+    parts["timepoint"] = [data.first_timepoint]       # [string] ****** revisar por si cambia la convención temporal
+    parts["channel"]    = data.channels
 
-    println("Order for the naming of the files: ",parts[follow_convention[1]]," ",parts[follow_convention[2]]," ",parts[follow_convention[3]]," ",parts[follow_convention[4]]," ",parts[follow_convention[5]])
+    println("Order for naming the files: ",parts[follow_convention[1]]," ",parts[follow_convention[2]]," ",parts[follow_convention[3]]," ",parts[follow_convention[4]]," ",parts[follow_convention[5]]," ",parts[follow_convention[6]])
 
-    # Names of all the files corresponding to the first time frame
-    data.all_files = [i1*i2*i3*i4*i5 for i1 in parts[follow_convention[1]] for i2 in parts[follow_convention[2]] for i3 in parts[follow_convention[3]] for i4 in parts[follow_convention[4]] for i5 in parts[follow_convention[5]]]
-    data.keep_rois = d["which_files"]["keep_rois"]
+    # Names of all the files corresponding to the first time point
+    data.all_files = [i1*i2*i3*i4*i5*i6 for i1 in parts[follow_convention[1]] for i2 in parts[follow_convention[2]] for i3 in parts[follow_convention[3]] for i4 in parts[follow_convention[4]] for i5 in parts[follow_convention[5]] for i6 in parts[follow_convention[6]]]
+    data.keep_rois = d["file_selection"]["keep_rois"]
 
-    data.exclude = d["which_files"]["exclude"]
+    data.exclude = d["file_selection"]["exclude"]
     
     if length(data.all_files)>4
         println("First file to analize: ",data.all_files[1], "\nSecond file to analize: ",data.all_files[2], "\nSecond-to-last file to analize: ",data.all_files[end-1], "\nLast file to analize: ",data.all_files[end])
     else
-        println("Files to analize: ",data.all_files)
+        println("Files to analize (first frame name only): ",data.all_files)
     end
     
     data.report = d["save_data"]["report"]
     data.save_images = d["save_data"]["save_images"]
+
+    """
+    Configuration summary
+---------------------
+Image directory: /data/my_experiment
+Image format: .tif
+Naming mode: generated
+Wells selected: 18
+Conditions: control, treatment
+ROIs excluded: 2
+Save report: yes
+Save segmented images: no
+
+Configuration valid. Ready to begin.
+
+validate_naming_convention(data) #**error report
+    """
+
+
+
     return data
 end

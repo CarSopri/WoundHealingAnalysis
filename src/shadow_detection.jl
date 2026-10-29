@@ -102,7 +102,7 @@ function identify_and_cut_shadow(h, w, y_cut, segments, segmented_final_im, shad
         #@info ("No cut: ",y_cut)
         return (1,h), false
     else
-        image_partition = (w*fraction_of_image[1],w*fraction_of_image[2])
+        image_partition = (Int(w*fraction_of_image[1]),Int(w*fraction_of_image[2]))
 
         lm,rm = find_leftmost_and_rightmost(segmented_final_im,value_shadow) # index 1 is vertical, 2 is horizontal
         tm,bm = find_topmost_and_bottommost(segmented_final_im,value_shadow)

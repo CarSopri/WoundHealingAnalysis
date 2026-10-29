@@ -20,7 +20,7 @@ Base.@kwdef mutable struct ParametersForAnalysis
     save_folder::String = ""
     # ***este exclude gigante es una bazofia, debería estar automatizado. debería guardar en un exclude.txt las que salteo cuando hago la segmentación ? y un log que explique por qué
     # y tendría que irse actualizando a medida que se corre de nuevo, sumando líneas que no estaban y chequeando si se acomodó una imagen que estaba flageada.
-    exclude::Vector{String} = [] #***esto debería ir llenándose con ignore_pits y después cargarlo en un .txt que, si existe, lo levante directamente, y se puedan agregar datos nuevos si hace falta.
+    exclude::Vector{String} = [] #***esto debería ir llenándose con ignore_wells y después cargarlo en un .txt que, si existe, lo levante directamente, y se puedan agregar datos nuevos si hace falta.
             #"A2_03_1_1","A2_03_1_2","A3_03_1_1","A3_03_1_3","A4_03_1_1","A5_03_1_1","A5_03_1_3","A6_03_1_1",
             #"B1_03_1_1","B1_03_1_2","B3_03_1_1","B3_03_1_2","B3_03_1_4","B4_03_1_4","B5_03_1_1","B5_03_1_5",
             #"C1_03_1_3","C4_03_1_5","C5_03_1_1","C5_03_1_5",
@@ -99,6 +99,36 @@ function load_data_from_hyperparams_file(hyperparams_file)
     return hyperparams
 end
 
+function save_hyperparams_to_file(hp::SegmentationHyperparameters, hyperparams_file::AbstractString)
+    open(hyperparams_file, "w") do io
+        println(io, "[Thresholding]")
+        println(io, "shadow_threshold_color = ", hp.shadow_threshold_color)
+        println(io, "shadow_segment_threshold_color = ", hp.shadow_segment_threshold_color)
+        println(io, "wound_threshold = ", hp.wound_threshold)
+
+        println(io, "\n[BandPass]")
+        println(io, "min_bp_filter = ", hp.min_bp_filter)
+        println(io, "max_bp_filter = ", hp.max_bp_filter)
+
+        println(io, "\n[Blur]")
+        println(io, "gaussian_blur_sigma = ", hp.gaussian_blur_sigma)
+
+        println(io, "\n[Felzenszwalb]")
+        println(io, "meansize_wound = ", hp.meansize_wound)
+        println(io, "minsize_wound = ", hp.minsize_wound)
+        println(io, "max_tries = ", hp.max_tries)
+
+        println(io, "\n[ProbableWoundPosition]")
+        println(io, "margin = ", hp.margin)
+        println(io, "max_left_wall_wound_position = ", hp.max_left_wall_wound_position)
+        println(io, "wound_centre = ", hp.wound_centre)
+        println(io, "max_right_wall_wound_position = ", hp.max_right_wall_wound_position)
+        println(io, "max_area_fraction = ", hp.max_area_fraction)
+        println(io, "merge_distance = ", hp.merge_distance)
+    end
+
+    return nothing
+end
 
 
 function load_preprocessing_pipeline(path::AbstractString)

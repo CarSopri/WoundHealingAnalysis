@@ -1,20 +1,18 @@
 code_folder = @__DIR__
+include(joinpath(code_folder,"load_data.jl"))
 include(joinpath(code_folder,"save_data.jl"))
-include(joinpath(code_folder,"segment_image_low_contrast.jl"))
+include(joinpath(code_folder,"segment_image.jl"))
 
 function initialize_report_files(data, report)
     if !report
-        return 0, 0
+        return 0, 0, 0
     end
     
-    report_file = init_report_file(data.main_folder * "scratch_report.txt", data.time_batches)
-    time_file = init_report_file(data.main_folder * "time_report.txt", data.time_batches)
+    area_file = init_report_file(data.main_folder * "scratch_report.txt", data.time_series)
+    width_file = init_report_file(data.main_folder * "width_report.txt", data.time_series)
+    time_file = init_report_file(data.main_folder * "time_report.txt", data.time_series)
     
-    # Write initial empty files
-    CSV.write(data.main_folder * "scratch_report.txt", report_file, delim='\t')
-    CSV.write(data.main_folder * "time_report.txt", time_file, delim='\t')
-    
-    return report_file, time_file
+    return area_file, width_file, time_file
 end
 
 function save_report_files(data, report_file, time_file)
@@ -22,24 +20,24 @@ function save_report_files(data, report_file, time_file)
     CSV.write(data.main_folder * "time_report.txt", time_file, delim='\t')
 end
 
-function update_report_file_ids(report_file, time_file, pit, roi, total_time_frames)
-    pit_roi_id = pit * string(roi)
+function update_report_file_ids(report_file, time_file, well, roi, total_time_frames)
+    well_roi_id = well * string(roi)
     
     # Add to scratch report if not present
-    if pit_roi_id ∉ report_file.ID
-        push!(report_file, vcat([pit_roi_id], [0.0 for _ in 1:total_time_frames]))
+    if well_roi_id ∉ report_file.ID
+        push!(report_file, vcat([well_roi_id], [0.0 for _ in 1:total_time_frames]))
     end
     
     # Add to time report if not present
-    if pit_roi_id ∉ time_file.ID
-        push!(time_file, vcat([pit_roi_id], [0.0 for _ in 1:total_time_frames]))
+    if well_roi_id ∉ time_file.ID
+        push!(time_file, vcat([well_roi_id], [0.0 for _ in 1:total_time_frames]))
     end
 end
 
-function update_time_report(data, time_file, pit, roi, imfile, full_id)
-    # Reference file is the first time point of the first batch #**acá también, ojo con el orden del namefile porque debería venir de config !!! T.T
-    ref = data.main_folder * data.sub_folders[1] * 
-          pit * string(roi) * data.name_time_batches[1] * 
+function update_time_report(data, time_file, well, roi, imfile, full_id)
+    # Reference file is the first time point of the first series #**acá también, ojo con el orden del namefile porque debería venir de config !!! T.T
+    ref = data.main_folder * data.subfolders[1] *
+          well * string(roi) * data.name_time_series[1] *
           data.common_name * lpad(1, 3, "0") * data.file_format
     
     time_from_file = (mtime(imfile) - mtime(ref)) / 3600  # in hours
@@ -52,22 +50,22 @@ function update_time_report(data, time_file, pit, roi, imfile, full_id)
 end
 
 
-function first_pass_collect_cuts(data, pit, roi, report_file, time_file, tf, save_images, segmentation_hyperparams, report)
+function first_pass_collect_cuts(data, well, roi, report_file, time_file, tf, save_images, segmentation_hyperparams, report)
     cuts_per_time = Dict{Int, Tuple{Int,Int}}()
     initial_cut = (nothing, nothing)  # Start with no cut
 
     # Update report files with new IDs if needed
     if report
-        update_report_file_ids(report_file, time_file, pit, roi, tf)
+        update_report_file_ids(report_file, time_file, well, roi, tf)
     end
     
-    for (batch_idx, time_batch) in enumerate(data.time_batches)
-        general_id = pit * string(roi) * data.name_time_batches[batch_idx] #**ojo acá y en ref porque estoy cambiando el orden respecto del primer exp we
+    for (series_idx, time_series) in enumerate(data.time_series)
+        general_id = well * string(roi) * data.name_time_series[series_idx] #**ojo acá y en ref porque estoy cambiando el orden respecto del primer exp we
         
-        for time in time_batch
+        for time in time_series
             # Build file paths and IDs
-            subfolder = data.sub_folders[batch_idx]
-            frame_number = time - time_batch[1] + 1
+            subfolder = data.subfolders[series_idx]
+            frame_number = time - time_series[1] + 1
             general_name = general_id * data.common_name * lpad(frame_number, 3, "0") * data.file_format
             imfile = joinpath(data.main_folder, subfolder, general_name)
             full_id = general_id * "_T" * lpad(time, 3, "0")
@@ -81,7 +79,7 @@ function first_pass_collect_cuts(data, pit, roi, report_file, time_file, tf, sav
                 
             # Update time report if needed
             if report
-                update_time_report(data, time_file, pit, roi, imfile, full_id)
+                update_time_report(data, time_file, well, roi, imfile, full_id)
             end
 
             k = 0
@@ -167,24 +165,24 @@ function analyze_if_refinement_needed(cuts_per_time)
     return false, nothing
 end
 
-function second_pass_refine_cuts(data, pit, roi, better_cut, old_cuts, 
+function second_pass_refine_cuts(data, well, roi, better_cut, old_cuts,
                                   report_file, time_file, save_images, 
                                   segmentation_hyperparams, report)
     current_lower, current_upper = better_cut
     
-    for (batch_idx, time_batch) in enumerate(data.time_batches)
-        general_id = pit * string(roi) * data.name_time_batches[batch_idx]
+    for (series_idx, time_series) in enumerate(data.time_series)
+        general_id = well * string(roi) * data.name_time_series[series_idx]
         
-        for time in time_batch
+        for time in time_series
             # Only re-segment frames that actually need the larger cut
             old_cut = old_cuts[time]
             needs_larger_cut = old_cut[1] > current_lower || old_cut[2] < current_upper
             
             if needs_larger_cut
                 # Build file paths
-                frame_number = time - time_batch[1] + 1
+                frame_number = time - time_series[1] + 1
                 general_name = general_id * data.common_name * lpad(frame_number, 3, "0") * data.file_format
-                imfile = data.main_folder * data.sub_folders[batch_idx] * general_name
+                imfile = data.main_folder * data.subfolders[series_idx] * general_name
                 full_id = general_id * "_T" * lpad(time, 3, "0")
                 
                 @info "Re-segmenting $full_id with better cut: $better_cut"
@@ -224,13 +222,13 @@ function second_pass_refine_cuts(data, pit, roi, better_cut, old_cuts,
     end
 end
 
-function process_pit_roi_combination(data, pit, roi, report_file, time_file, tf, save_images, segmentation_hyperparams, report)
+function process_well_roi_combination(data, well, roi, report_file, time_file, tf, save_images, segmentation_hyperparams, report)
     # Store cuts found for each time point
     cuts_per_time = Dict{Int, Vector{Int}}()
     
     # First pass: collect all cuts without re-segmentation
     cuts_per_time = first_pass_collect_cuts(
-        data, pit, roi, report_file, time_file, tf,
+        data, well, roi, report_file, time_file, tf,
         save_images, segmentation_hyperparams, report
     )
     
@@ -241,12 +239,12 @@ function process_pit_roi_combination(data, pit, roi, report_file, time_file, tf,
     if refinement_needed
         @info "Refinement needed! Re-segmenting with better cut: $better_cut"
         second_pass_refine_cuts(
-            data, pit, roi, better_cut, cuts_per_time,
+            data, well, roi, better_cut, cuts_per_time,
             report_file, time_file, save_images, segmentation_hyperparams, report
         )
     end
     
-    # Save after each pit/roi combination
+    # Save after each well/roi combination
     if report
         save_report_files(data, report_file, time_file)
     end
@@ -257,27 +255,27 @@ function run_segmentation_for_all_files_new(data::DataInfo, segmentation_hyperpa
     report = data.report
     save_images = data.save_images
 
-    # Get list of pits to process (excluding ignored ones)
-    pits_to_process = [p for p in data.pit_names if p ∉ data.ignore_pits]
-    tf = data.time_batches[end][end]
+    # Get list of wells to process (excluding ignored ones)
+    wells_to_process = [p for p in data.well_names if p ∉ data.ignore_wells]
+    tf = data.time_series[end][end]
 
     ID = String
     general_name = String
     subfolder = String
     
     # Si no existe el file, crearlo, y si existe, hacer un df
-    report_file, time_file = initialize_report_files(data, report)
+    area_file, width_file, time_file = initialize_report_files(data, report)
 
     l = 0
-    for pit in pits_to_process
+    for well in wells_to_process
         for roi in data.rois
             l+=1
             if l!=1 #****************** esto debería tener en cuenta el file_start o algo así que puse en config !!
                 continue
             end
 
-            process_pit_roi_combination(
-                data, pit, roi, report_file, time_file, tf,
+            process_well_roi_combination(
+                data, well, roi, area_file, time_file, tf,
                 save_images, segmentation_hyperparams, report
             )
             
@@ -285,126 +283,334 @@ function run_segmentation_for_all_files_new(data::DataInfo, segmentation_hyperpa
     end
     
     if report
-        save_report_files(data, report_file, time_file)
+        save_report_files(data, area_file, time_file)
     end
 end
 
-#*****esta sacarla
-function run_segmentation_for_all_files(data::DataInfo, segmentation_hyperparams::SegmentationHyperparameters)
+function well_roi_id(well::String, roi::String)
+    roi_label = startswith(roi, "ROI") ? roi : "ROI" * roi
+    return well * roi_label
+end
+function image_filename(data::DataInfo, well::String, roi::String, channel::String, series_index::Int, time::Int)
+    series = data.time_series[series_index]
+
+    # Preserve the original convention: filenames use a frame index
+    # relative to the beginning of each time series.
+    frame_number = time - first(series) + 1
+    timepoint = lpad(string(frame_number), 3, '0')
+
+    parts = Dict(
+        "common_name"      => data.common_name,
+        "roi"              => roi,
+        "name_time_series" => data.name_time_series[series_index],
+        "well_name"        => well,
+        "channel"          => channel,
+        "timepoint"        => timepoint,
+    )
+
+    return join((parts[key] for key in data.follow_convention), "") *
+           data.file_format
+end
+function image_path(data::DataInfo, well::String, roi::String, channel::String, series_index::Int, time::Int)
+    filename = image_filename(data, well, roi, channel, series_index, time)
+
+    return joinpath(
+        data.main_folder,
+        data.subfolders[series_index],
+        filename,
+    )
+end
+function segment_one_image(data::DataInfo, segmentation_hyperparams::SegmentationHyperparameters, image_id::String, filepath::String, area_file, y_cut_all_t, time::Int)
+    save_images = data.save_images
+    k = 0
+
+    # First segmentation attempt.
+    y_cut, keep_running = run_segmentation(
+        data.main_folder,
+        image_id,
+        filepath,
+        area_file,
+        save_images,
+        y_cut_all_t,
+        segmentation_hyperparams,
+    )
+
+    if time == 1
+        y_cut_all_t = y_cut
+    end
+
+    # Second attempt when the first result indicates a cut was found.
+    if y_cut != (1, 1960)
+        y_cut, keep_running = run_segmentation(
+            data.main_folder,
+            image_id,
+            filepath,
+            area_file,
+            save_images,
+            y_cut_all_t,
+            segmentation_hyperparams,
+        )
+
+        if y_cut == (-1, -1)
+            return y_cut_all_t, true
+        end
+
+        if time == 1
+            y_cut_all_t = y_cut
+        end
+    end
+
+    # Retry if the segmentation has not yet been accepted.
+    while keep_running && k < 15
+        y_cut, keep_running = run_segmentation(
+            data.main_folder,
+            image_id,
+            filepath,
+            area_file,
+            save_images,
+            y_cut_all_t,
+            segmentation_hyperparams,
+        )
+
+        k += 1
+
+        @info "Segmentation retry" image_id iteration=k y_cut=y_cut
+
+        if time == 1
+            y_cut_all_t = y_cut
+        end
+    end
+
+    # The Boolean indicates whether to stop the current time series.
+    return y_cut_all_t, false
+end
+
+function ensure_report_row!(report_file, report_id::String, n_timepoints::Int)
+    if !(report_id in report_file.ID)
+        push!(report_file, vcat([report_id], zeros(n_timepoints)))
+    end
+
+    return nothing
+end
+
+
+function save_segmentation_reports(data::DataInfo, area_file, time_file)
+    CSV.write(
+        joinpath(data.main_folder, "scratch_report.txt"),
+        area_file;
+        delim = '\t',
+    )
+
+    CSV.write(
+        joinpath(data.main_folder, "time_report.txt"),
+        time_file;
+        delim = '\t',
+    )
+
+    return nothing
+end
+
+function roi_labels(rois::Union{String,Vector{String}})
+    return rois isa String ? (isempty(rois) ? String[] : [rois]) : rois
+end
+function segment_all_files(data::DataInfo, segmentation_hyperparams::SegmentationHyperparameters)
+    validate_naming_convention(data)
+
+    # Prepare reports and basic information.
+    area_file, width_file, time_file = initialize_report_files(data, data.report)
+
+    n_timepoints = data.time_series[end][end]
+    rois = roi_labels(data.rois) #***nidea
+
+    # Process each channel, well, ROI, and time series.
+    for channel in data.channels
+        for well in data.wells_used
+            for roi in rois
+                report_id = well_roi_id(well, roi)
+
+                # Shared cut information for this well/ROI/channel,
+                # carried across the time points and time series.
+                y_cut_all_t = (nothing, nothing)
+
+                if data.report
+                    ensure_report_row!(area_file, report_id, n_timepoints)
+                    ensure_report_row!(time_file, report_id, n_timepoints)
+                end
+
+                for (series_index, times) in enumerate(data.time_series)
+                    #series_label = data.name_time_series[series_index]
+                    general_ID = report_id
+
+                    for time in times
+                        filename = image_filename(data, well, roi, channel, series_index, time)
+                        filepath = joinpath(data.main_folder, data.subfolders[series_index], filename)
+                        image_id = general_ID * "_T" * lpad(string(time), 3, '0')
+
+                        # Skip missing images, as in the original function.
+                        if !isfile(filepath)
+                            @info "FILE NOT FOUND" filepath
+                            continue
+                        end
+
+                        @info "Processing image" image_id filepath
+
+                        # Update the elapsed-time report.
+                        if data.report
+                            reference_path = image_path(data, well, roi, channel, 1, first(data.time_series[1]))
+                            time_from_file = (mtime(filepath) - mtime(reference_path)) / 3600
+                            row = findfirst(==(report_id), time_file.ID)
+
+                            if isnothing(row)
+                                error("Report row not found for ID: $report_id")
+                            end
+
+                            time_file[row, time + 1] = time_from_file
+                        end
+
+                        # Run the complete segmentation sequence.
+                        y_cut_all_t, stop_series = segment_one_image(
+                            data,
+                            segmentation_hyperparams,
+                            image_id,
+                            filepath,
+                            area_file,
+                            y_cut_all_t,
+                            time,
+                        )
+
+                        # Preserve the original break behavior:
+                        # stop this time series, then continue with the next one.
+                        if stop_series
+                            break
+                        end
+                    end
+                end
+
+                # Save reports after finishing each well/ROI/channel combination.
+                if data.report
+                    save_segmentation_reports(data, area_file, time_file)
+                end
+            end
+        end
+    end
+
+    # Final report write, as in the original function.
+    if data.report
+        save_segmentation_reports(data, area_file, time_file)
+
+        # TODO: Generate the width report with standard deviations.
+    end
+
+    return nothing
+end
+
+function segment_all_files2(data::DataInfo, segmentation_hyperparams::SegmentationHyperparameters)
     report = data.report
     save_images = data.save_images
     
-    pit = [p for p in data.pit_names if p ∉ data.ignore_pits]
-    tf = data.time_batches[end][end]
+    well = [p for p in data.well_names if p ∉ data.ignore_wells]
+    tf = data.time_series[end][end]
 
     ID = String
     general_name = String
     subfolder = String
     
-    # Si no existe el file, crearlo, y si existe, hacer un df
-    if report
-        report_file = init_report_file(data.main_folder*"scratch_report.txt", data.time_batches)
-        time_file = init_report_file(data.main_folder*"time_report.txt", data.time_batches)
-    else 
-        report_file = 0
-        time_file = 0
-    end
+    area_file, width_file, time_file = initialize_report_files(data, report)
 
     l = 0
     
-    for p in pit
-        for n_photo in data.rois
-            l+=1
-            #if l<13
-            #    continue
-            #end
-    
-            y_cut_all_t = (nothing,nothing)
+    for ch in data.channels
+        for p in well
+            for n_photo in data.rois
+                l+=1
 
-            for (n_batch,time_batch) in enumerate(data.time_batches)
+                y_cut_all_t = (nothing,nothing)
 
-                general_ID = p*string(n_photo)*data.name_time_batches[n_batch] #**ojo acá y en ref porque estoy cambiando el orden respecto del primer exp we
+                for (n_series,time_series) in enumerate(data.time_series)
 
-                if report
-                    
-                    # Check if ID is already a row in report_file
-                    #**acá debería ser p*string(n_photo); lo del medio debería cambiar sólo con t así que no hay que repetirlo en rows
-                    if p*string(n_photo) ∉ report_file.ID #**acá ojooo es p para el primer exp
-                        push!(report_file, vcat([p*string(n_photo)],[0.0 for i in 1:tf]))
-                    end
-                    if p*string(n_photo) ∉ time_file.ID 
-                        push!(time_file, vcat([p*string(n_photo)],[0.0 for i in 1:tf]))
-                    end
-                end
-                
-                for time in time_batch
-                    
-                    #time_displacement = n_batch!=1 ? time_batch[n_batch-1][end] : 0
-                    subfolder = data.sub_folders[n_batch]
-                    general_name = general_ID*data.common_name*lpad(time-time_batch[1]+1,3,"0")*data.file_format
-                    ID = general_ID*"_T"*lpad(time,3,"0")
-
-                    if !isfile(data.main_folder*subfolder*general_name)
-                        @info (data.main_folder*subfolder*general_name, "\n!!!!!!!!!!!!!!!!!!!!!! FILE NOT FOUND !!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                        continue
-                    end
-
-                    @info ("#####################   ",ID,"   #####################")
+                    general_ID = p*string(n_photo)*data.name_time_series[n_series] #**ojo acá y en ref porque estoy cambiando el orden respecto del primer exp we
 
                     if report
-                        ref = data.main_folder*data.sub_folders[1]*p*string(n_photo)*data.name_time_batches[1]*data.common_name*lpad(1,3,"0")*data.file_format
-                        time_from_file = ( mtime(data.main_folder*subfolder*general_name) - mtime(ref) )/3600 # in hours
 
-                        @info (time_file.ID,"  ",ID)
-                        row = findfirst(time_file.ID .== ID[1:end-12])
-                        col = parse(Int64,ID[end-2:end])
-                        @info (data.main_folder*subfolder*general_name,"  ",ref)
-                        #@info (row, col, "  ",time_from_file)
-                        time_file[row, col+1] = time_from_file
-                    end
-        
-                    # **si ya se halló un y_cut en t=1, hay que aplicarlo al resto
-                    # si se halló después, mejor ignorar ese solamente                #####################################
-                    k = 0
-                    # **va a encontrar el lente a la primera (no espero que dé mal la primera segmentación en ese caso) xq está pintado de blanco
-                    y_cut, keep_running = run_segmentation(data.main_folder, ID, data.main_folder*subfolder*general_name, report_file, save_images,y_cut_all_t, segmentation_hyperparams)
-                    
-                    if time == 1
-                        y_cut_all_t = y_cut
-                    end
-                    # Esperaría que en el segundo paso no recorte más xq ya está, pero que segmente mejor
-                    # Si no había lente presente, este paso es redundante, sólo repite el anterior
-                    if y_cut != (1,1960)
-                        y_cut, keep_running = run_segmentation(data.main_folder, ID, data.main_folder*subfolder*general_name, report_file, save_images, y_cut_all_t, segmentation_hyperparams)
-                        if y_cut == (-1,-1)
-                            break
+                        # Check if ID is already a row in report_file
+                        #**acá debería ser p*string(n_photo); lo del medio debería cambiar sólo con t así que no hay que repetirlo en rows
+                        if p*string(n_photo) ∉ area_file.ID #**acá ojooo es p para el primer exp
+                            push!(area_file, vcat([p*string(n_photo)],[0.0 for i in 1:tf]))
                         end
+                        if p*string(n_photo) ∉ time_file.ID
+                            push!(time_file, vcat([p*string(n_photo)],[0.0 for i in 1:tf]))
+                        end
+                    end
+
+                    for time in time_series
+
+                        #time_displacement = n_series!=1 ? time_series[n_series-1][end] : 0
+                        subfolder = data.subfolders[n_series]
+                        general_name = general_ID*data.common_name*lpad(time-time_series[1]+1,3,"0")*data.file_format
+                        ID = general_ID*"_T"*lpad(time,3,"0")
+
+                        if !isfile(data.main_folder*subfolder*general_name)
+                            @info (data.main_folder*subfolder*general_name, "\n!!!!!!!!!!!!!!!!!!!!!! FILE NOT FOUND !!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                            continue
+                        end
+
+                        @info ("#####################   ",ID,"   #####################")
+
+                        if report
+                            ref = data.main_folder*data.subfolders[1]*p*string(n_photo)*data.name_time_series[1]*data.common_name*lpad(1,3,"0")*data.file_format
+                            time_from_file = ( mtime(data.main_folder*subfolder*general_name) - mtime(ref) )/3600 # in hours
+
+                            @info (time_file.ID,"  ",ID)
+                            row = findfirst(time_file.ID .== ID[1:end-12])
+                            col = parse(Int64,ID[end-2:end])
+                            @info (data.main_folder*subfolder*general_name,"  ",ref)
+                            #@info (row, col, "  ",time_from_file)
+                            time_file[row, col+1] = time_from_file
+                        end
+
+                        # **si ya se halló un y_cut en t=1, hay que aplicarlo al resto
+                        # si se halló después, mejor ignorar ese solamente                #####################################
+                        k = 0
+                        # **va a encontrar el lente a la primera (no espero que dé mal la primera segmentación en ese caso) xq está pintado de blanco
+                        y_cut, keep_running = run_segmentation(data.main_folder, ID, data.main_folder*subfolder*general_name, area_file, save_images,y_cut_all_t, segmentation_hyperparams)
+
                         if time == 1
                             y_cut_all_t = y_cut
                         end
-                    end
-                    # In case the segmentation wasn't right
-                    while keep_running && k<15 #***debería ser un input parameter
-                        y_cut, keep_running = run_segmentation(data.main_folder, ID, data.main_folder*subfolder*general_name, report_file, save_images, y_cut_all_t, segmentation_hyperparams)
-                        k+=1
-                        @info ("-----> Number of iterations: ",k, ", Cut in y (if shadow present): ",y_cut)
-                        if time == 1
-                            y_cut_all_t = y_cut
+                        # Esperaría que en el segundo paso no recorte más xq ya está, pero que segmente mejor
+                        # Si no había lente presente, este paso es redundante, sólo repite el anterior
+                        if y_cut != (1,1960)
+                            y_cut, keep_running = run_segmentation(data.main_folder, ID, data.main_folder*subfolder*general_name, area_file, save_images, y_cut_all_t, segmentation_hyperparams)
+                            if y_cut == (-1,-1)
+                                break
+                            end
+                            if time == 1
+                                y_cut_all_t = y_cut
+                            end
+                        end
+                        # In case the segmentation wasn't right
+                        while keep_running && k<15 #***debería ser un input parameter
+                            y_cut, keep_running = run_segmentation(data.main_folder, ID, data.main_folder*subfolder*general_name, area_file, save_images, y_cut_all_t, segmentation_hyperparams)
+                            k+=1
+                            @info ("-----> Number of iterations: ",k, ", Cut in y (if shadow present): ",y_cut)
+                            if time == 1
+                                y_cut_all_t = y_cut
+                            end
                         end
                     end
                 end
-            end
 
-            if report
-                CSV.write(data.main_folder*"scratch_report.txt", report_file, delim='\t') #***esto lo tendría que adaptar para que vaya escribiendo cada tanto aunque sea idk; capaz un log que anote de dónde hasta dónde corrió x las dudas?
-                CSV.write(data.main_folder*"time_report.txt", time_file, delim='\t')
+                if report
+                    CSV.write(data.main_folder*"scratch_report.txt", area_file, delim='\t') #***esto lo tendría que adaptar para que vaya escribiendo cada tanto aunque sea idk; capaz un log que anote de dónde hasta dónde corrió x las dudas?
+                    CSV.write(data.main_folder*"time_report.txt", time_file, delim='\t')
+                end
+
             end
-            
         end
     end
     
     if report
-        CSV.write(data.main_folder*"scratch_report.txt", report_file, delim='\t') #***esto lo tendría que adaptar para que vaya escribiendo cada tanto aunque sea idk; capaz un log que anote de dónde hasta dónde corrió x las dudas?
+        CSV.write(data.main_folder*"scratch_report.txt", area_file, delim='\t') #***esto lo tendría que adaptar para que vaya escribiendo cada tanto aunque sea idk; capaz un log que anote de dónde hasta dónde corrió x las dudas?
         CSV.write(data.main_folder*"time_report.txt", time_file, delim='\t')
 
         #*********generar width report con std !
