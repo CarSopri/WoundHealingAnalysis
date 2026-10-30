@@ -8,7 +8,6 @@ function run_segmentation_playground(;image_path = nothing, hyperparams_path = n
     end
 
     image_dir = joinpath(splitpath(image_path)[1:end-1])
-    image_filename = splitpath(image_path)[end]
 
     if hyperparams_path === nothing
         hyperparams_path = joinpath(project_dir, "configs", "Hyperparams.toml")
@@ -26,7 +25,7 @@ function run_segmentation_playground(;image_path = nothing, hyperparams_path = n
     segmentation_hyperparams = load_data_from_hyperparams_file(hyperparams_path)
     steps = load_preprocessing_pipeline(preprocessing_path)
 
-    segments, labels_segments, segmented_final_im = segmentation_steps(image_dir, image_filename, segmentation_hyperparams; steps=steps, display_steps = true)
+    segments, labels_segments, segmented_final_im = segmentation_steps(load(image_path), image_path, segmentation_hyperparams; steps=steps, display_steps = true)
 
     save_preprocessing_pipeline(steps, joinpath(image_dir,"PreprocessingSteps.toml"))
     save_hyperparams_to_file(segmentation_hyperparams, joinpath(image_dir,"Hyperparams.toml"))
