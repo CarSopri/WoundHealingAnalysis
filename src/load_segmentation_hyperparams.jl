@@ -18,17 +18,11 @@ Base.@kwdef mutable struct ParametersForAnalysis
     plot_L::Bool = true
 
     save_folder::String = ""
-    # ***este exclude gigante es una bazofia, debería estar automatizado. debería guardar en un exclude.txt las que salteo cuando hago la segmentación ? y un log que explique por qué
-    # y tendría que irse actualizando a medida que se corre de nuevo, sumando líneas que no estaban y chequeando si se acomodó una imagen que estaba flageada.
-    exclude::Vector{String} = [] #***esto debería ir llenándose con ignore_wells y después cargarlo en un .txt que, si existe, lo levante directamente, y se puedan agregar datos nuevos si hace falta.
-            #"A2_03_1_1","A2_03_1_2","A3_03_1_1","A3_03_1_3","A4_03_1_1","A5_03_1_1","A5_03_1_3","A6_03_1_1",
-            #"B1_03_1_1","B1_03_1_2","B3_03_1_1","B3_03_1_2","B3_03_1_4","B4_03_1_4","B5_03_1_1","B5_03_1_5",
-            #"C1_03_1_3","C4_03_1_5","C5_03_1_1","C5_03_1_5",
-            #"D2_03_1_2","D2_03_1_3","D3_03_1_1","D3_03_1_3","D4_03_1_2","D4_03_1_4","D4_03_1_5","D5_03_1_2","D5_03_1_3","D5_03_1_4","D6_03_1_2","D6_03_1_3","D6_03_1_4"]
+    exclude::Vector{String} = []
 
 end
 
-Base.@kwdef mutable struct SegmentationHyperparameters #*** estos también debería cargarlos en config.toml
+Base.@kwdef mutable struct SegmentationHyperparameters
 
     # Felzenszwalb hyperparameters
     meansize_wound::Int64 = 150000
@@ -42,11 +36,11 @@ Base.@kwdef mutable struct SegmentationHyperparameters #*** estos también deber
     # Color threshold (in Grayscale) for eliminating possible shadows in the image
     shadow_threshold_color::Float64 = 0.25 # Pixels with a value below this will be considered shadow
     shadow_segment_threshold_color::Float64 = 0.6 # Segmentation results in a "bleaching" of the shadow, so this number should be higher (¨***creo q los convierto a blanco, es por eso en realidad no?)
-    wound_threshold::Float64 = 0.6 # As a factor for mean image intensity
+    wound_threshold::Float64 = 0.7 # As a factor for mean image intensity
 
     # In px
     min_bp_filter::Int64 = 3
-    max_bp_filter::Int64 = 4
+    max_bp_filter::Int64 = 40
 
     gaussian_blur_sigma::Int64 = 5
 
@@ -54,9 +48,9 @@ Base.@kwdef mutable struct SegmentationHyperparameters #*** estos también deber
     #image_partition::Int64 = 3 # esto divide la imagen en x partes iguales para ver que la sombra no esté tapando el centro de la imagen, en cuyo caso no se puede rescatar ninguna sección para segmentar
     margin::Int64 = 40 # esto hace que se corte un poquito más allá de la sombra encontrada por las dudas (en px)
     #band = (0.2,0.5,0.8) # As fraction of image's width; to check if segment found was uncentered and/or too close to the border, so it won't be flagged as the wound
-    max_left_wall_wound_position::Float64 = 0.2
+    max_left_wall_wound_position::Float64 = 0.33
     wound_centre::Float64 = 0.5
-    max_right_wall_wound_position::Float64 = 0.8
+    max_right_wall_wound_position::Float64 = 0.66
     # **creo que esto en realidad tendría que ser un chequeo de que la herida esté aprox adentro de la segmentación del tiempo anterior
 
     # Check if segment is too big to be the wound

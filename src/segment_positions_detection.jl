@@ -74,3 +74,58 @@ function get_mean_vertical_axis(labels_im, h,w, segment_index)
     return count_y/count_k
 end
 
+function get_segment_stats(labels_im, h,w, segment_index)
+    h, w = size(labels_im)
+
+    # Mean x-coordinate over all pixels in the segment
+    sum_x = 0
+    n_pixels = 0
+
+    # Online statistics for the width distribution across rows
+    n_rows = 0
+    mean_width = 0.0
+    M2_width = 0.0
+
+    @inbounds for row in 1:h
+        xmin = w + 1
+        xmax = 0
+
+        for x in 1:w
+            if labels_im[row, x] == segment_index
+                sum_x += x
+                n_pixels += 1
+
+                xmin = min(xmin, x)
+                xmax = max(xmax, x)
+            end
+        end
+
+        # Update width statistics if this row contains the segment
+        if xmax > 0
+            width = xmax - xmin + 1
+
+            n_rows += 1
+            delta = width - mean_width
+            mean_width += delta / n_rows
+            M2_width += delta * (width - mean_width)
+        end
+    end
+
+    if n_pixels == 0
+        return (
+            mean_vertical_axis = NaN,
+            mean_width = NaN,
+            std_width = NaN,
+        )
+    end
+
+    # Sample standard deviation across rows
+    std_width = n_rows > 1 ? sqrt(M2_width / (n_rows - 1)) : 0.0
+
+    return (
+        mean_vertical_axis = sum_x / n_pixels,
+        mean_width = mean_width,
+        std_width = std_width,
+    )
+end
+

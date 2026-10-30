@@ -1,4 +1,6 @@
 
+using DataFrames
+
 code_folder = @__DIR__
 include(joinpath(code_folder,"image_analyzers.jl"))
 include(joinpath(code_folder,"shadow_detection.jl"))
@@ -58,8 +60,9 @@ function apply_preprocessing_step!(name::String, ctx::Dict{Symbol, Any}, hp::Seg
 end
 
 
-function segmentation_steps(image_dir::String, image_filename::String, segmentation_hyperparams::SegmentationHyperparameters; steps::Vector{String} = DEFAULT_PREPROCESSING_STEPS, display_steps::Bool = false,)
-    im = load(joinpath(image_dir, image_filename))
+function segmentation_steps(im, image_path::String, segmentation_hyperparams::SegmentationHyperparameters; steps::Vector{String} = DEFAULT_PREPROCESSING_STEPS, display_steps::Bool = false,)
+    image_dir = joinpath(splitpath(image_path)[1:end-1])
+    image_filename = splitpath(image_path)[end]
     im_name = split(image_filename, ".")[1]
 
     ctx = Dict{Symbol, Any}()
@@ -403,9 +406,9 @@ end
 
 
 
-function run_segmentation(main_folder, ID, im_file, report_file, save_images, y_cut, segmentation_hyperparams)
+function run_segmentation(main_folder::String, ID::String, im_file::String, area_file::DataFrame, width_file::DataFrame, roughness_file::DataFrame, save_images::Bool, y_cut_all_t::Tuple{Union{Nothing,Int64},Union{Nothing,Int64}}, segmentation_hyperparams::SegmentationHyperparameters, preprocessing_steps::Vector{String})
     """
-    report_file = 0 if you don't want to save areas in a .txt; else, should be the string with the name of the file
+    area_file = 0 if you don't want to save areas in a .csv; else, should be the string with the name of the file
     """
     
     """
@@ -414,24 +417,25 @@ function run_segmentation(main_folder, ID, im_file, report_file, save_images, y_
     meansize_segmentation, minsize_segmentation = get_felzenszwalb_hyperparams(segmentation_hyperparams.k, segmentation_hyperparams.meansize_wound, segmentation_hyperparams.minsize_wound, segmentation_hyperparams.inv_max_tries)
 
     """
-    If y_cut is not [nothing,nothing], cut the image where shadows were previously found.
+    If y_cut_all_t is not [nothing,nothing], cut the image where shadows were previously found.
     """
-    im, h, w, y_cut, keep_running = cut_big_shadows(im_file, y_cut)
+    im, h, w, y_cut_all_t, keep_running = cut_big_shadows(im_file, y_cut_all_t)
     # If a cut was needed to remove shadows from the image, the segmentation stops here and is run again on the cut image in an external loop. 
     if !keep_running
-        return y_cut, keep_running
+        return y_cut_all_t, keep_running
     end
+
 
     """
     Run preprocessing of the image and segmentation algorithm.
     """
-    segments, labels_segments, segmented_final_im = segmentation_steps(joinpath(splitpath(im_file)[1:end-1]), splitpath(im_file)[end], segmentation_hyperparams) #***falta steps
+    segments, labels_segments, segmented_final_im = segmentation_steps(im, im_file, segmentation_hyperparams; steps = preprocessing_steps) #***falta steps
 
     """
     Find if there are any shadows present in the image (this is analyzed from the segmented image), and escape the function to redo segmentation if a cut is needed.
     """
     #***esto debería tener una lógica distinta porque sólo va a correr en el primer paso pero no queda super explícito como está ahora (y_cut=(nothing,nothing) sólo en T=001)
-    y_cut, cut_made = identify_and_cut_shadow(h,w, y_cut, segments, segmented_final_im, segmentation_hyperparams.shadow_segment_threshold_color, segmentation_hyperparams.margin, [segmentation_hyperparams.max_left_wall_wound_position, segmentation_hyperparams.max_right_wall_wound_position])
+    y_cut, cut_made = identify_and_cut_shadow(h,w, y_cut_all_t, segments, segmented_final_im, segmentation_hyperparams.shadow_segment_threshold_color, segmentation_hyperparams.margin, [segmentation_hyperparams.max_left_wall_wound_position, segmentation_hyperparams.max_right_wall_wound_position])
     # Run segmentation again if a shadow was identified, now with the image cut where the shadow ends.
     if cut_made
         return y_cut,cut_made 
@@ -472,27 +476,27 @@ function run_segmentation(main_folder, ID, im_file, report_file, save_images, y_
     edges_image = paint_edges(im, edges)
     #wound_mask = build_wound_mask(labels_segments, h, w, area_scratch, area_scratch_index2)
     wound_edge_img = RGB.(segmented_final_im) # fill(Gray(1.0), h, w)
-    mean_y = get_mean_vertical_axis(labels_segments, h,w, area_scratch_index)
+    mean_y, mean_width, std_width = get_segment_stats(labels_segments, h,w, area_scratch_index)#get_mean_vertical_axis(labels_segments, h,w, area_scratch_index)
     classify_segments!(wound_edge_img, segmented_final_im, segments, labels_segments, area_scratch_index, area_scratch_index2, w, mean_y)
 
     
     if save_images
-        # Save segmented image
-        #save(main_folder*"segmented_image_"*ID*".png",colorview(Gray,segmented_final_im))
         # Save original image with edges from segments drawn on top
         save(main_folder*"image_"*ID*".jpg",edges_image)
         # Save wound image with edges
         save(main_folder*"wound_edges_image_"*ID*".png",wound_edge_img)
     end
 
-    if report_file != 0
-        #**cuidado si la fila no existe la tengo que agregar, y idem la columna (pero capaz eso desde afuera)
-        row = findfirst(report_file.ID .== ID[1:end-12]) # well name
-        col = parse(Int64,ID[end-2:end]) # time value
-        @info ("Row: ",row," Col: ",col)
+    if area_file != 0
+        row = findfirst(area_file.ID .== split(ID,"_T")[1]) # well name
+        col = findfirst(names(area_file) .== "T"*split(ID,"_T")[2]) # time value
+        #@info ("Row: ",row," Col: ",col)
+        #@info(width_file)
 
-        report_file[row, col+1] = area_scratch
-        #print(report_file,"\t",length(findall(item -> item == area_scratch, labels_segments)))
+        area_file[row, col] = area_scratch
+        width_file[row, col] = mean_width
+        roughness_file[row, col] = std_width
+        #print(area_file,"\t",length(findall(item -> item == area_scratch, labels_segments)))
     end
     #@info ("Area for ",ID,": ",area_scratch)
 
