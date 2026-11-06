@@ -6,17 +6,17 @@ shadow_segment_threshold_color = 0.6 # Segments with a value higher than this wi
 wound_threshold = 0.7 # As a fraction of mean image intensity
 
 [BandPass]
-# In px
-min_bp_filter = 3
-max_bp_filter = 40
+# DoG filter, select in px minimum and maximum wavelength for recognizable object size
+min_bp_filter = 3 # Particles smaller than this will be blurred
+max_bp_filter = 40 # Wavelengths bigger than this will be blurred; for example subtle changes in background illumination
 
 [Blur]
+# Gaussian filter: smooth out details smaller than this radius
 gaussian_blur_sigma = 5
 
 [Felzenszwalb]
-#****cómo le llaman a estos en documentación Felzenszwalb ?
-meansize_wound = 150000 #*** esto probablemente debería depender del tamaño de la imagen? y del tamaño relativo que esperás que tenga la herida. capaz debería ser un %
-minsize_wound = 75000
+felzenszwalb_k = 150000 # Larger values generally produce fewer, larger segments
+felzenszwalb_min_size = 75000 ## Minimum segment area, in pixels.
 max_tries = 15 # Number of attempts to try before declaring segmentation failed
 
 [ProbableWoundPosition]

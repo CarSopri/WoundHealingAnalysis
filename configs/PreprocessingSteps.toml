@@ -1,0 +1,8 @@
+
+steps = [
+    "bandpass",
+    "equalize",
+    "detect_edges",
+    "blur",
+    "threshold",
+]

@@ -1,0 +1,153 @@
+
+# Before running the analysis:
+# 1) Set main_folder to the directory containing your images.
+# 2) Complete subfolders and file_format.
+# 3) Configure the filename conventions to match your images.
+# 4) Choose naming_mode = "generated" (if you have many images and a pattern that the wells follow) or "manual" (if you have few images or no pattern to follow), and complete the corresponding section.
+# 5) Assign each well to a condition using well_conditions.
+# 6) Check keep_rois and exclude if you want to skip particular regions.
+# 7) Choose which outputs to save in [save_data].
+# Important: Do not change the order of entries in positional lists such as well_conditions and keep_rois without checking which well each entry corresponds to.
+# The program should validate the configuration before starting the analysis and report any missing or inconsistent values. You should run test_load_data before running the segmentation algorithm, to check that it will find all your files.
+# You can see some examples on how to fill these variables with actual image files to analyze inside the examples folder.
+
+
+
+[folders]
+# =========================
+# Complete with the directories to find your wound images to segment. Use absolute path for main_folder, and path relative to main_folder for subfolders
+# Windows example: main_folder = "D:/Microscopy/WoundHealingExp" ; subfolders = ["day1", "day2"]
+# Linux example: main_folder = "/home/user/Microscopy/WoundHealingExp" ; subfolders = ["day1", "day2"]
+# !! Use forward slashes (/) in paths, including on Windows !!
+# The number of elements in subfolders has to be the same as in time_series and name_time_series (you might need to repeat the name of the folder)
+# If main_folder is "./", it will be considered as the directory where this config.toml is located
+# =========================
+main_folder = "/paste/main/images/directory/here/"
+subfolders = [ "paste/all/subfolders/inside/main_folder/with/images/to/analyze",
+                "leave/empty/string/if/no/subfolders/are/needed/"]
+
+
+[format]
+file_format = ".tif"
+
+
+[conditions]
+# =========================
+# Write the names of the conditions you wish to study separately
+# Below, you will select which well has which condition, following the order that you select here
+# =========================
+conditions = ["control", "treatment"]
+
+
+[timepoint_naming_convention]
+# =========================
+# Write numbers in time_series (inside [] brackets) corresponding to the frames belonging to each series, and their corresponding naming convention for each one in name_time_series
+# There has to be as many elements in time_series (each series is inside [] brackets) as in name_time_series as in subfolders
+# It assumes that the naming convention might have changed, for example if measures were taken on different days, or if the first image follows a different naming system to the rest
+# =========================
+time_series = [[1,2,3], [4,5,6]]
+name_time_series = ["_03_1_", "_06_1_"]
+# =========================
+# Write the naming convention for the first timepoint in your first series
+# Every other timepoint will be assumed to be following the same convention in order as they appear in time_series
+# If naming convention changes, maybe write every combination in name_time_series, and leave first_timepoint as ""
+# =========================
+first_timepoint = "001"
+
+
+[general_naming_convention]
+# =========================
+# Write the naming convention for channel and a common filter for all of your images
+# =========================
+channels = ["1"]
+common_name = "_Bright Field-High Contrast_"
+# =========================
+# Write the filename components in the order in which they appear in your actual filenames.
+# Use each component exactly once, separated by "*".
+# Available components: common_name, roi, name_time_series, channel, well_name, timepoint
+# If any of these is not present in your naming convention, leave an empty string or vector in the corresponding variable and place it wherever in follow_convention (but it must be present here!).
+# =========================
+follow_convention = "well_name*name_time_series*channel*roi*common_name*timepoint"
+
+
+[well_naming_convention]
+# =========================
+# Write the naming convention for every ROI in the well with most ROIs
+# If some well has a different ROI convention, write every possibility here and the code will just ignore images not found, searching in the order you write here
+# For example, if your first well has 3 ROIs but your second well only 1, write ["ROI1", "ROI2", "ROI3"]
+# =========================
+rois = ["ROI1","ROI2","ROI3"]
+# =========================
+# If you have many files, you might want to write the convention of each well's row and column names in a plate (then, naming_mode is "generated")
+# If no regular convention was followed, write every well name manually (then, naming_mode is "manual")
+# =========================
+well_naming_mode = "generated"
+
+# =========================
+# Choose one mode, either manual or generated, and edit only its corresponding section; the other section is ignored
+# =========================
+[well_naming_convention.manual]
+# =========================
+# Ignore if you prefer the names to be automatically generated
+# Else, write the IDs for every well manually
+# =========================
+well_names = ["A1","A2"]
+# =========================
+# Write the row and column names present in your wells (without repeat)
+# =========================
+row = "A"
+col = ["1", "2"]
+# =========================
+# Select the corresponding condition for each well by writing its number in the corresponding order inside conditions variable above
+# Here, both wells were the control conditions. This won't work if there are fewer elements than all possible row*col combinations.
+# =========================
+well_conditions = [1,1]
+
+[well_naming_convention.generated]
+# =========================
+# Ignore if you prefer the names to be input manually
+# Else, every combination of row+col will be generated from the string ("1234") or vector (["1","2","3","4"]) written as input
+# =========================
+row = "ABCD"
+col = "123456"
+ignore_wells = ["B1","B2","C1","C2","D5","D6"] # These wells were empty in the experiment or should be left out of the automatic naming generation for some reason. Leave empty [] if all of them were used, or if you don't mind the code taking a little longer while it tries to find images that don't exist.
+# =========================
+# Select the corresponding condition for each well by writing its number in the corresponding order inside conditions variable above
+# Here, 1 means "control", 2 means "treatment" and 0 means "nothing to analyze here".
+# This won't work if there are fewer elements than all possible row*col combinations.
+# =========================
+well_conditions = [1, 1, 1, 1, 1, 1,    # row "A"
+                  0, 0, 2, 2, 2, 1,     # row "B"
+                  0, 0, 1, 1, 1, 1,     # row "C"
+                  2, 2, 2, 2, 0, 0]     # row "D"
+
+
+[file_selection]
+# =========================
+# Write here whatever files you want the code to skip for every timepoint
+# Ignore if you want all files to be analyzed.
+# =========================
+from_file = 1 # Maybe you don't want to analyze all wells at once, so start from this file. The number corresponds to the order in which the row+col names are created (not counting files inside ignore_wells), or inserted manually
+until_file = -1 # And end on this one (count them in order as they're generated, and the number you write will be included as the last to analyze). If -1, it analyzes until the last file found
+# =========================
+# Maybe you have only some wells with less ROIs than others, and you know how many (leave empty [] if you don't mind the code taking a little longer while it tries to find images that don't exist)
+# So here, for every row+col combination, write up to which roi the code should look for. For example, for well "A1" we have all ROIs, but for "A2" we don't have ROI3, and for "B1" we don't have any images
+# This won't work if there are fewer elements than all possible row*col combinations.
+# =========================
+keep_rois = [3,2,2,3,1,2,    # row "A"
+            0,0,1,1,1,1,     # row "B"
+            0,0,2,1,1,2,     # row "C"
+            2,3,3,2,0,0]     # row "D"
+# =========================
+# Complete this last variable with the ROIs for which there is a corresponding image file but for some reason you deem them not suitable for the analysis and would rather skip them. Don't write the full name of the file, just combine row_name+col_name+roi_name
+# =========================
+exclude = ["A1ROI1", "D4ROI2"]
+
+[save_data]
+# =========================
+# If report is true, .csv files with all wound area and width results will be generated inside main_folder once the code finishes analyzing your images.
+# If save_images is true (recommended), all segmented images will be saved inside main_folder in order to check what the algorithm found as the wound.
+# =========================
+report = true
+save_images = false
+
