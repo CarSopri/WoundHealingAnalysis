@@ -170,12 +170,17 @@ function segment_all_files(data::DataInfo, segmentation_hyperparams::Segmentatio
     area_file, width_file, roughness_file, time_file = initialize_report_files(data, data.report)
 
     n_timepoints = data.time_series[end][end]
-    rois = roi_labels(data.rois) #***nidea
+    rois = roi_labels(data.rois) 
+    println("rois ",rois)
 
     # Process each channel, well, ROI, and time series.
     for channel in data.channels
-        for well in data.wells_used
-            for roi in rois
+        for (well_number,well) in enumerate(data.wells_used)
+            for (roi_number,roi) in enumerate(rois)
+                if !isempty(data.keep_rois) && data.keep_rois[well_number]<roi_number
+                    continue
+                end
+
                 report_id = well_roi_id(well, roi)
 
                 # Shared cut information for this well/ROI/channel,
@@ -252,8 +257,6 @@ function segment_all_files(data::DataInfo, segmentation_hyperparams::Segmentatio
     # Final report write, as in the original function.
     if data.report
         save_segmentation_reports(data, area_file, width_file, roughness_file, time_file)
-
-        # TODO: Generate the width report with standard deviations.
     end
 
     return nothing

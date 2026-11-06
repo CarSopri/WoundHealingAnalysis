@@ -49,7 +49,7 @@ function detect_edges(im)
     
     edge_detect = convert(AbstractArray, Kernel.Laplacian() )
     
-    filtered_gray_im = Gray.(abs.(imfilter(blur_image!(Gray.(im),1,1), edge_detect))) #***************no me acordaba que había este paso. ver si se puede saltear
+    filtered_gray_im = Gray.(abs.(imfilter(im, edge_detect)))
     return filtered_gray_im ./ maximum(filtered_gray_im)
 end
 
@@ -72,7 +72,7 @@ function bandpass_filter(img, filter_small, filter_large)
     # smaller radius keeps image mostly intact, while bigger radius 
     # blurs it. The difference evidences homogeneous zones, and 
     # we will substract them.
-    # -------------------------------------------------------- #******es un poco más sofisticado que el filtro laplaciano
+    # -------------------------------------------------------- 
     σ_small = filter_small 
     σ_large = filter_large
 

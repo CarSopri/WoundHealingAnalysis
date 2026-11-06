@@ -15,7 +15,7 @@ Base.@kwdef mutable struct DataInfo
     name_time_series::Vector{String} = []
     first_timepoint::String = "001"
 
-    channels::Vector{String} = ["1_"]
+    channels::Union{String,Vector{String}} = ["1_"]
     common_name::String = ""
     follow_convention::Vector{String} = ["common_name","roi","name_time_series","well_name","channel","timepoint"]
 
@@ -75,6 +75,52 @@ function validate_naming_convention(data::DataInfo)
     return nothing
 end
 
+function normalize_user_path(path::AbstractString)
+    return replace(strip(path), "\\" => "/")
+end
+
+function resolve_path(path, config_path)
+    config_dir = dirname(abspath(config_path))
+
+    if isabspath(path)
+        return normpath(path)
+    else
+        return normpath(joinpath(config_dir, path))
+    end
+end
+
+function validate_folders(main_folder, subfolders)
+    #if !isabspath(main_folder)
+    #    error("main_folder must be an absolute path.\nReceived: $(main_folder)")
+    #end
+
+
+    if !isdir(main_folder)
+        error("The main data folder does not exist:\n$(main_folder)\nPlease check the [folders] section in config.toml. Use forward slashes / to separate directories.")
+    end
+
+    for subfolder in subfolders
+        if isabspath(subfolder)
+            error(
+                "Each subfolder must be relative to main_folder.\n" *
+                "Received: $subfolder"
+            )
+        end
+
+        folder = joinpath(joinpath(main_folder, subfolder))
+
+        #if !isdir(folder)
+        #    error(
+        #        "Could not find a configured data folder:\n" *
+        #        "$folder\n" *
+        #        "Please check the subfolders list in config.toml."
+        #    )
+        #end
+    end
+
+    return nothing
+end
+
 #data.keep_rois = ignore_rois_from_this_int(d["file_selection"]["keep_rois"],
 #                                            [l for l in data.well_names],length(data.rois)
 #                                            )
@@ -84,8 +130,13 @@ function load_data_from_config_file(config_file)
     d = TOML.parsefile(config_file)
     data = DataInfo()
 
-    data.main_folder = d["folders"]["main_folder"]
+    data.main_folder = resolve_path(d["folders"]["main_folder"], config_file)
     data.subfolders = d["folders"]["subfolders"]
+
+    data.main_folder = normalize_user_path(data.main_folder)
+    data.subfolders = [normalize_user_path(subfolder) for subfolder in data.subfolders]
+
+    validate_folders(data.main_folder, data.subfolders)
             
     data.file_format = d["format"]["file_format"]
     data.conditions = d["conditions"]["conditions"]
@@ -99,6 +150,8 @@ function load_data_from_config_file(config_file)
     data.common_name = d["general_naming_convention"]["common_name"]
     data.follow_convention = split(d["general_naming_convention"]["follow_convention"],"*")
     follow_convention = data.follow_convention
+
+    validate_naming_convention(data)
 
     data.rois = d["well_naming_convention"]["rois"]
 
@@ -166,8 +219,8 @@ Save segmented images: no
 
 Configuration valid. Ready to begin.
 
-validate_naming_convention(data) #**error report
-    """
+    
+     """
 
 
 

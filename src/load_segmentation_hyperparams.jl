@@ -25,8 +25,8 @@ end
 Base.@kwdef mutable struct SegmentationHyperparameters
 
     # Felzenszwalb hyperparameters
-    meansize_wound::Int64 = 150000
-    minsize_wound::Int64 = 75000
+    felzenszwalb_k::Int64 = 150000
+    felzenszwalb_min_size::Int64 = 75000
 
     # Number of attempts to try before declaring segmentation failed
     k::Int64 = 0
@@ -74,8 +74,8 @@ function load_data_from_hyperparams_file(hyperparams_file)
 
     hyperparams.gaussian_blur_sigma = hp_data["Blur"]["gaussian_blur_sigma"]
 
-    hyperparams.meansize_wound = hp_data["Felzenszwalb"]["meansize_wound"]
-    hyperparams.minsize_wound = hp_data["Felzenszwalb"]["minsize_wound"]
+    hyperparams.felzenszwalb_k = hp_data["Felzenszwalb"]["felzenszwalb_k"]
+    hyperparams.felzenszwalb_min_size = hp_data["Felzenszwalb"]["felzenszwalb_min_size"]
     #***debería tener un valor máximo para que no pase a tener pruebas con params negativos !!
     hyperparams.max_tries = hp_data["Felzenszwalb"]["max_tries"]
     hyperparams.inv_max_tries = 1/hyperparams.max_tries
@@ -108,8 +108,8 @@ function save_hyperparams_to_file(hp::SegmentationHyperparameters, hyperparams_f
         println(io, "gaussian_blur_sigma = ", hp.gaussian_blur_sigma)
 
         println(io, "\n[Felzenszwalb]")
-        println(io, "meansize_wound = ", hp.meansize_wound)
-        println(io, "minsize_wound = ", hp.minsize_wound)
+        println(io, "felzenszwalb_k = ", hp.felzenszwalb_k)
+        println(io, "felzenszwalb_min_size = ", hp.felzenszwalb_min_size)
         println(io, "max_tries = ", hp.max_tries)
 
         println(io, "\n[ProbableWoundPosition]")

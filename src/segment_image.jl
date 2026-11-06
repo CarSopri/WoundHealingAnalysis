@@ -88,7 +88,7 @@ function segmentation_steps(im, image_path::String, segmentation_hyperparams::Se
     ctx[:filter_im][ctx[:lens_shadow_indices]] .= 1.0
 
     # Apply felzenszwalb segmentation
-    ctx[:segments] = felzenszwalb(ctx[:filter_im], segmentation_hyperparams.meansize_wound, segmentation_hyperparams.minsize_wound)
+    ctx[:segments] = felzenszwalb(ctx[:filter_im], segmentation_hyperparams.felzenszwalb_k, segmentation_hyperparams.felzenszwalb_min_size)
 
     # Save segmentation results
     ctx[:labels_segments] = labels_map(ctx[:segments])
@@ -107,14 +107,14 @@ function segmentation_steps(im, image_path::String, segmentation_hyperparams::Se
     return result
 end
 
-function get_felzenszwalb_hyperparams(k, meansize, minsize, inv_max_tries)
+function get_felzenszwalb_hyperparams(k, felzenszwalb_k, felzenszwalb_min_size, inv_max_tries)
     """
     Run to try smaller and smaller segments while segmentation tries keep failing. Stop after max_tries attempts.
     """
-    meansize_segmentation = meansize - k*meansize*inv_max_tries
-    minsize_segmentation = minsize - k*minsize*inv_max_tries
+    felzenszwalb_k_segmentation = felzenszwalb_k - k*felzenszwalb_k*inv_max_tries
+    felzenszwalb_min_size_segmentation = felzenszwalb_min_size - k*felzenszwalb_min_size*inv_max_tries
     
-    return meansize_segmentation, minsize_segmentation
+    return felzenszwalb_k_segmentation, felzenszwalb_min_size_segmentation
 end
 
 
@@ -414,7 +414,7 @@ function run_segmentation(main_folder::String, ID::String, im_file::String, area
     """
     Params for segmentation: an external loop runs this segmentation code and keeps making the felzenszwalb parameters smaller any time the segmentation fails
     """
-    meansize_segmentation, minsize_segmentation = get_felzenszwalb_hyperparams(segmentation_hyperparams.k, segmentation_hyperparams.meansize_wound, segmentation_hyperparams.minsize_wound, segmentation_hyperparams.inv_max_tries)
+    felzenszwalb_k_segmentation, felzenszwalb_min_size_segmentation = get_felzenszwalb_hyperparams(segmentation_hyperparams.k, segmentation_hyperparams.felzenszwalb_k, segmentation_hyperparams.felzenszwalb_min_size, segmentation_hyperparams.inv_max_tries)
 
     """
     If y_cut_all_t is not [nothing,nothing], cut the image where shadows were previously found.
@@ -429,7 +429,7 @@ function run_segmentation(main_folder::String, ID::String, im_file::String, area
     """
     Run preprocessing of the image and segmentation algorithm.
     """
-    segments, labels_segments, segmented_final_im = segmentation_steps(im, im_file, segmentation_hyperparams; steps = preprocessing_steps) #***falta steps
+    segments, labels_segments, segmented_final_im = segmentation_steps(im, im_file, segmentation_hyperparams; steps = preprocessing_steps, display_steps=false) 
 
     """
     Find if there are any shadows present in the image (this is analyzed from the segmented image), and escape the function to redo segmentation if a cut is needed.
